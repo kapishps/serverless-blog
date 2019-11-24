@@ -1,0 +1,161 @@
+service: serverless-rest-api-with-dynamodb
+
+plugins:
+  - serverless-localstack
+
+custom:
+  localstack:
+    host: http://localhost
+    stages:
+      - local
+    debug: true
+  s3Bucket: UserUploads
+  dynamoDBTable: Users
+
+provider:
+  name: aws
+  runtime: nodejs10.x
+  stage: ${opt:stage, env:AWS_STAGE, 'local'}
+  region: ${opt:region, env:AWS_REGION, 'us-east-1'}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - s3:GetObject
+        - s3:GetObjectAcl
+        - s3:PutObject
+        - s3:PutObjectAcl
+      Resource: "arn:aws:s3:::${self:custom.s3Bucket}/*"
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:custom.dynamoDBTable}"
+
+functions:
+  user-create:
+    handler: user-create/index
+    events:
+      - http:
+          path: admin/createUser
+          method: post
+          cors: true
+
+  user-list-all:
+    handler: user-list-all/index
+    events:
+      - http:
+          path: admin/list_all_users
+          method: get
+          cors: true
+  
+  user-delete:
+    handler: user-delete/index
+    events:
+      - http:
+          path: admin/delete_user/{id}
+          method: delete
+          cors: true
+
+  user-update:
+    handler: user-update/index
+    events:
+      - http:
+          path: admin/update_user/{id}
+          method: put
+          cors: true
+
+  login:
+    handler: login/index
+    events:
+      - http:
+          path: login
+          method: post
+          cors: true
+  
+  register:
+    handler: register/index
+    events:
+      - http:
+          path: register
+          method: post
+          cors: true
+  
+  # update-profile:
+  #   handler: update-profile/index
+  #   events:
+  #     - http:
+  #         path: user/{id}
+  #         method: put
+  #         cors: true
+
+  # password-reset:
+  #   handler: password-reset/index
+  #   events:
+  #     - http:
+  #         path: password_reset
+  #         method: post
+  #         cors: true
+
+resources:
+  Resources:
+    UsersDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        BillingMode: PAY_PER_REQUEST
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        TableName: ${self:custom.dynamoDBTable}
+    UserUploads:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: ${self:custom.s3Bucket}
+        CorsConfiguration:
+          CorsRules:
+            - AllowedHeaders:
+                - "Authorization"
+              AllowedMethods:
+                - GET
+              AllowedOrigins:
+                - "*"
+            - AllowedHeaders:
+                - "*"
+              AllowedMethods:
+                - PUT
+              AllowedOrigins:
+                - "*"
+    # This response is needed for custom authorizer failures cors support ¯\_(ツ)_/¯
+    GatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: EXPIRED_TOKEN
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        StatusCode: '401'
+    AuthFailureGatewayResponse:
+      Type: 'AWS::ApiGateway::GatewayResponse'
+      Properties:
+        ResponseParameters:
+          gatewayresponse.header.Access-Control-Allow-Origin: "'*'"
+          gatewayresponse.header.Access-Control-Allow-Headers: "'*'"
+        ResponseType: UNAUTHORIZED
+        RestApiId:
+          Ref: 'ApiGatewayRestApi'
+        StatusCode: '401'
+    # requestQueue:
+    #   Type: AWS::SQS::Queue
+    #   Properties:
+    #     QueueName: requestQueue

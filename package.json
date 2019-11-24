@@ -1,0 +1,19 @@
+{
+  "name": "lambda-user-dynamodb",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "uuid": "^3.3.3",
+    "jsonwebtoken": "latest",
+    "bcrypt": "latest"
+  },
+  "devDependencies": {
+    "serverless-localstack": "^0.4.20"
+  },
+  "author": "kapish",
+  "license": "ISC"
+}
