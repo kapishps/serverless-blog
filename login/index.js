@@ -1,38 +1,47 @@
 const AWS = require('aws-sdk');
-const uuid = require('uuid');
+const jwt = require('jsonwebtoken');
 const bcrypt = require('bcrypt');
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
-const { DYNAMODB_TABLE : DYNAMODB_TABLE, SALT_ROUNDS : SALT_ROUNDS } = process.env;
+const { DYNAMODB_TABLE: DYNAMODB_TABLE, JWT_SECRET: JWT_SECRET } = process.env;
 
 exports.handler = async (event) => {
 
     try {
-        const data = JSON.parse(event.body);
+        const req = JSON.parse(event.body);
         const params = {
             TableName: DYNAMODB_TABLE,
-            Item: {
-                id: uuid.v1(),
-                username: data.username,
-                email : data.email,
-                name: data.name,
-                dob: data.dob,
-                password: data.password,
-                role: data.role,
+            FilterExpression: '#username = :username',
+            ExpressionAttributeNames: {
+                '#username': 'username',
+            },
+            ExpressionAttributeValues: {
+                ':username': req.username,
             },
         }
 
-        params.Item.password = await hashpassword(params.Item.password);
-        
-        const user = await dynamoDb.put(params).promise();
+        const data = await dynamoDb.scan(params).promise();
 
-        return {
-            statusCode: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*', // Required for CORS support to work
-                'Access-Control-Allow-Credentials': true, // Required for cookies, authorization headers with HTTPS
-            },
-            body: JSON.stringify(user.Items),
+        if (data.Count === 1) {
+            const user = data.Items[0];
+            const match = await bcrypt.compare(req.password, user.password);
+
+            if (match) {
+                return {
+                    statusCode: 200,
+                    headers: {
+                        'Access-Control-Allow-Origin': '*', // Required for CORS support to work
+                        'Access-Control-Allow-Credentials': true, // Required for cookies, authorization headers with HTTPS
+                    },
+                    body: JSON.stringify({ 'token': generatetoken(user.id, user.role) }),
+                }
+            }
+            else {
+                throw new Error('Username or Password incorrect');
+            }
+        }
+        else {
+            throw new Error('');        // None or More than one user found
         }
     } catch (err) {
         console.error(err);
@@ -47,13 +56,10 @@ exports.handler = async (event) => {
     }
 };
 
-
-const hashpassword = async (password) => {
-    return new Promise((resolve, reject) => {
-        bcrypt.hash(password, SALT_ROUNDS, function(err, hash) {
-            if(err) 
-                reject(err);
-            resolve(hash);
-        });
+const generatetoken = (username, role) => {
+    var token = jwt.sign({ username: username, role: role }, JWT_SECRET, {
+        expiresIn: '60m' // expires in 1 hour
     });
+    console.log(token);
+    return token;
 }

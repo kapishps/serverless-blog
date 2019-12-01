@@ -4,7 +4,7 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
-const { DYNAMODB_TABLE : DYNAMODB_TABLE, JWT_SECRET: JWT_SECRET } = process.env;
+const { DYNAMODB_TABLE : DYNAMODB_TABLE, SALT_ROUNDS: SALT_ROUNDS, JWT_SECRET: JWT_SECRET } = process.env;
 
 exports.handler = async (event) => {
 
@@ -36,7 +36,8 @@ exports.handler = async (event) => {
             body: JSON.stringify({
                 'id' : user.Items[0].id, 
                 'username' :user.Items[0].username,
-                'token' : generatetoken({})}),
+                'token' : generatetoken(user.Items[0].username, 'user')
+            }),
         }
     } catch (err) {
         console.error(err);
@@ -62,6 +63,10 @@ const hashpassword = async (password) => {
     });
 }
 
-const generatetoken = (data) =>{
-    return jwt.sign(data, 'JWT_SECRET', { expiresIn: '1h' });
+const generatetoken = (username, role) => {
+    var token = jwt.sign({ username: username, role: role }, JWT_SECRET, {
+        expiresIn: '60m' // expires in 1 hour
+    });
+    console.log(token);
+    return token;
 }
